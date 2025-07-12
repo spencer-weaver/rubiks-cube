@@ -27,22 +27,48 @@ type Cube struct {
 
 type Cubes []Cube
 
-func getChar(side int) byte {
+type DisplayConfig struct {
+	mode string
+}
+
+type PlayConfig struct {
+	running bool
+}
+
+func getChar(side int, config DisplayConfig) string {
 	switch side {
 	case 0:
-		return 'W'
+		if config.mode == "ansi" {
+			return "\033[47m  \033[0m"
+		}
+		return "W"
 	case 1:
-		return 'O'
+		if config.mode == "ansi" {
+			return "\033[48;5;208m  \033[0m"
+		}
+		return "O"
 	case 2:
-		return 'G'
+		if config.mode == "ansi" {
+			return "\033[42m  \033[0m"
+		}
+		return "G"
 	case 3:
-		return 'R'
+		if config.mode == "ansi" {
+			return "\033[41m  \033[0m"
+		}
+		return "R"
 	case 4:
-		return 'B'
+		if config.mode == "ansi" {
+			return "\033[44m  \033[0m"
+		}
+		return "B"
 	case 5:
-		return 'Y'
+		if config.mode == "ansi" {
+			return "\033[43m  \033[0m"
+		}
+		return "Y"
 	default:
-		return '?'
+		return "?"
 	}
 }
 
@@ -115,52 +141,6 @@ func (cubes *Cubes) NewCube() Cube {
 	return cube
 }
 
-func getTerminalWidth() int {
-	width, _, err := term.GetSize(int(os.Stdout.Fd()))
-	if err != nil {
-		// fallback or default width
-		return 80
-	}
-	return width
-}
-
-func (cubes *Cubes) loadCubeStrings(index int) [6]string {
-
-	var strings [6]string
-	strings[0] = fmt.Sprintf("   %c%c      ",
-		getChar((*cubes)[index].left[1].colours[(2+cubes.getPiece(index, 1).orientation)%3]),
-		getChar((*cubes)[index].right[1].colours[(1+cubes.getPiece(index, 5).orientation)%3]))
-	strings[1] = fmt.Sprintf("   %c%c      ",
-		getChar((*cubes)[index].left[0].colours[(1+cubes.getPiece(index, 0).orientation)%3]),
-		getChar((*cubes)[index].right[0].colours[(2+cubes.getPiece(index, 4).orientation)%3]))
-	strings[2] = fmt.Sprintf("%c%c %c%c %c%c %c%c",
-		getChar((*cubes)[index].left[1].colours[(0+cubes.getPiece(index, 1).orientation)%3]),
-		getChar((*cubes)[index].left[0].colours[(0+cubes.getPiece(index, 0).orientation)%3]),
-		getChar((*cubes)[index].left[0].colours[(2+cubes.getPiece(index, 0).orientation)%3]),
-		getChar((*cubes)[index].right[0].colours[(1+cubes.getPiece(index, 4).orientation)%3]),
-		getChar((*cubes)[index].right[0].colours[(0+cubes.getPiece(index, 4).orientation)%3]),
-		getChar((*cubes)[index].right[1].colours[(0+cubes.getPiece(index, 5).orientation)%3]),
-		getChar((*cubes)[index].right[1].colours[(2+cubes.getPiece(index, 5).orientation)%3]),
-		getChar((*cubes)[index].left[1].colours[(1+cubes.getPiece(index, 1).orientation)%3]))
-	strings[3] = fmt.Sprintf("%c%c %c%c %c%c %c%c",
-		getChar((*cubes)[index].left[2].colours[(0+cubes.getPiece(index, 2).orientation)%3]),
-		getChar((*cubes)[index].left[3].colours[(0+cubes.getPiece(index, 3).orientation)%3]),
-		getChar((*cubes)[index].left[3].colours[(1+cubes.getPiece(index, 3).orientation)%3]),
-		getChar((*cubes)[index].right[3].colours[(2+cubes.getPiece(index, 7).orientation)%3]),
-		getChar((*cubes)[index].right[3].colours[(0+cubes.getPiece(index, 7).orientation)%3]),
-		getChar((*cubes)[index].right[2].colours[(0+cubes.getPiece(index, 6).orientation)%3]),
-		getChar((*cubes)[index].right[2].colours[(1+cubes.getPiece(index, 6).orientation)%3]),
-		getChar((*cubes)[index].left[2].colours[(2+cubes.getPiece(index, 2).orientation)%3]))
-	strings[4] = fmt.Sprintf("   %c%c      ",
-		getChar((*cubes)[index].left[3].colours[(2+cubes.getPiece(index, 3).orientation)%3]),
-		getChar((*cubes)[index].right[3].colours[(1+cubes.getPiece(index, 7).orientation)%3]))
-	strings[5] = fmt.Sprintf("   %c%c      ",
-		getChar((*cubes)[index].left[2].colours[(1+cubes.getPiece(index, 2).orientation)%3]),
-		getChar((*cubes)[index].right[2].colours[(2+cubes.getPiece(index, 6).orientation)%3]))
-
-	return strings
-}
-
 func (cubes *Cubes) getPiece(cube, piece int) *CornerPiece {
 	if piece < 4 && piece >= 0 {
 		return (*cubes)[cube].left[piece]
@@ -182,49 +162,255 @@ func (cubes *Cubes) swapPieces(cube, piece1, piece2 int) {
 	*p1, *p2 = *p2, *p1
 }
 
-func (cubes *Cubes) rotatePiece(cube, piece, turns int) {
+func (cubes *Cubes) rotatePiece(cube, piece, turns int, clockwise bool) {
 	p := cubes.getPiece(cube, piece)
-	p.orientation = (p.orientation + turns) % 3
+	direction := 1
+	if clockwise {
+		direction = -1
+	}
+	p.orientation = (p.orientation + (turns * direction))
+	if p.orientation < 0 {
+		p.orientation += 3
+	}
+	p.orientation = p.orientation % 3
 }
 
 func (cubes *Cubes) move(cube int, move byte) {
 	switch move {
-	case 'F':
+	case 'h':
+		// F
 		cubes.swapPieces(cube, 0, 4)
 		cubes.swapPieces(cube, 0, 7)
 		cubes.swapPieces(cube, 0, 3)
-		cubes.rotatePiece(cube, 0, 2)
-		cubes.rotatePiece(cube, 4, 1)
-		cubes.rotatePiece(cube, 3, 1)
-		cubes.rotatePiece(cube, 7, 2)
-	case 'B':
-	case 'U':
-	case 'D':
-	case 'R':
-	case 'L':
+		cubes.rotatePiece(cube, 0, 1, true)
+		cubes.rotatePiece(cube, 4, 1, false)
+		cubes.rotatePiece(cube, 7, 1, true)
+		cubes.rotatePiece(cube, 3, 1, false)
+	case 'g':
+		// F'
+		cubes.swapPieces(cube, 0, 3)
+		cubes.swapPieces(cube, 0, 7)
+		cubes.swapPieces(cube, 0, 4)
+		cubes.rotatePiece(cube, 0, 1, true)
+		cubes.rotatePiece(cube, 4, 1, false)
+		cubes.rotatePiece(cube, 7, 1, true)
+		cubes.rotatePiece(cube, 3, 1, false)
+	case 'a':
+		// B
+		cubes.swapPieces(cube, 1, 2)
+		cubes.swapPieces(cube, 1, 6)
+		cubes.swapPieces(cube, 1, 5)
+		cubes.rotatePiece(cube, 1, 1, false)
+		cubes.rotatePiece(cube, 2, 1, true)
+		cubes.rotatePiece(cube, 6, 1, false)
+		cubes.rotatePiece(cube, 5, 1, true)
+	case ';':
+		// B'
+		cubes.swapPieces(cube, 1, 5)
+		cubes.swapPieces(cube, 1, 6)
+		cubes.swapPieces(cube, 1, 2)
+		cubes.rotatePiece(cube, 1, 1, false)
+		cubes.rotatePiece(cube, 2, 1, true)
+		cubes.rotatePiece(cube, 6, 1, false)
+		cubes.rotatePiece(cube, 5, 1, true)
+	case 'i':
+		// U
+		cubes.swapPieces(cube, 0, 1)
+		cubes.swapPieces(cube, 0, 5)
+		cubes.swapPieces(cube, 0, 4)
+		cubes.rotatePiece(cube, 0, 1, false)
+		cubes.rotatePiece(cube, 1, 1, true)
+		cubes.rotatePiece(cube, 5, 1, false)
+		cubes.rotatePiece(cube, 4, 1, true)
+	case 'r':
+		// U'
+		cubes.swapPieces(cube, 0, 4)
+		cubes.swapPieces(cube, 0, 5)
+		cubes.swapPieces(cube, 0, 1)
+		cubes.rotatePiece(cube, 0, 1, false)
+		cubes.rotatePiece(cube, 1, 1, true)
+		cubes.rotatePiece(cube, 5, 1, false)
+		cubes.rotatePiece(cube, 4, 1, true)
+	case 's':
+		// D
+		cubes.swapPieces(cube, 3, 7)
+		cubes.swapPieces(cube, 3, 6)
+		cubes.swapPieces(cube, 3, 2)
+		cubes.rotatePiece(cube, 3, 1, true)
+		cubes.rotatePiece(cube, 7, 1, false)
+		cubes.rotatePiece(cube, 6, 1, true)
+		cubes.rotatePiece(cube, 2, 1, false)
+	case 'l':
+		// D'
+		cubes.swapPieces(cube, 3, 2)
+		cubes.swapPieces(cube, 3, 6)
+		cubes.swapPieces(cube, 3, 7)
+		cubes.rotatePiece(cube, 3, 1, true)
+		cubes.rotatePiece(cube, 7, 1, false)
+		cubes.rotatePiece(cube, 6, 1, true)
+		cubes.rotatePiece(cube, 2, 1, false)
+	case 'o':
+		// R
+		cubes.swapPieces(cube, 4, 5)
+		cubes.swapPieces(cube, 4, 6)
+		cubes.swapPieces(cube, 4, 7)
+	case 'j':
+		// R'
+		cubes.swapPieces(cube, 4, 7)
+		cubes.swapPieces(cube, 4, 6)
+		cubes.swapPieces(cube, 4, 5)
+	case 'f':
+		// L
+		cubes.swapPieces(cube, 0, 3)
+		cubes.swapPieces(cube, 0, 2)
+		cubes.swapPieces(cube, 0, 1)
+	case 'e':
+		// L'
+		cubes.swapPieces(cube, 0, 1)
+		cubes.swapPieces(cube, 0, 2)
+		cubes.swapPieces(cube, 0, 3)
 	}
 }
 
-func (cubes *Cubes) print() {
+func (cubes *Cubes) loadCubeStrings(index int, config DisplayConfig) [8]string {
 
-	var cubeStrings [][6]string
+	var strings [8]string
+	strings[0] = fmt.Sprintf("    %s%s    ",
+		getChar((*cubes)[index].left[1].colours[(1+cubes.getPiece(index, 1).orientation)%3], config),
+		getChar((*cubes)[index].right[1].colours[(2+cubes.getPiece(index, 5).orientation)%3], config))
+	strings[1] = fmt.Sprintf("    %s%s    ",
+		getChar((*cubes)[index].left[1].colours[(2+cubes.getPiece(index, 1).orientation)%3], config),
+		getChar((*cubes)[index].right[1].colours[(1+cubes.getPiece(index, 5).orientation)%3], config))
+	strings[2] = fmt.Sprintf("    %s%s    ",
+		getChar((*cubes)[index].left[0].colours[(1+cubes.getPiece(index, 0).orientation)%3], config),
+		getChar((*cubes)[index].right[0].colours[(2+cubes.getPiece(index, 4).orientation)%3], config))
+	strings[3] = fmt.Sprintf("%s%s%s%s%s%s",
+		getChar((*cubes)[index].left[1].colours[(0+cubes.getPiece(index, 1).orientation)%3], config),
+		getChar((*cubes)[index].left[0].colours[(0+cubes.getPiece(index, 0).orientation)%3], config),
+		getChar((*cubes)[index].left[0].colours[(2+cubes.getPiece(index, 0).orientation)%3], config),
+		getChar((*cubes)[index].right[0].colours[(1+cubes.getPiece(index, 4).orientation)%3], config),
+		getChar((*cubes)[index].right[0].colours[(0+cubes.getPiece(index, 4).orientation)%3], config),
+		getChar((*cubes)[index].right[1].colours[(0+cubes.getPiece(index, 5).orientation)%3], config))
+	strings[4] = fmt.Sprintf("%s%s%s%s%s%s",
+		getChar((*cubes)[index].left[2].colours[(0+cubes.getPiece(index, 2).orientation)%3], config),
+		getChar((*cubes)[index].left[3].colours[(0+cubes.getPiece(index, 3).orientation)%3], config),
+		getChar((*cubes)[index].left[3].colours[(1+cubes.getPiece(index, 3).orientation)%3], config),
+		getChar((*cubes)[index].right[3].colours[(2+cubes.getPiece(index, 7).orientation)%3], config),
+		getChar((*cubes)[index].right[3].colours[(0+cubes.getPiece(index, 7).orientation)%3], config),
+		getChar((*cubes)[index].right[2].colours[(0+cubes.getPiece(index, 6).orientation)%3], config))
+	strings[5] = fmt.Sprintf("    %s%s    ",
+		getChar((*cubes)[index].left[3].colours[(2+cubes.getPiece(index, 3).orientation)%3], config),
+		getChar((*cubes)[index].right[3].colours[(1+cubes.getPiece(index, 7).orientation)%3], config))
+	strings[6] = fmt.Sprintf("    %s%s    ",
+		getChar((*cubes)[index].left[2].colours[(1+cubes.getPiece(index, 2).orientation)%3], config),
+		getChar((*cubes)[index].right[2].colours[(2+cubes.getPiece(index, 6).orientation)%3], config))
+	strings[7] = fmt.Sprintf("    %s%s    ",
+		getChar((*cubes)[index].left[2].colours[(2+cubes.getPiece(index, 2).orientation)%3], config),
+		getChar((*cubes)[index].right[2].colours[(1+cubes.getPiece(index, 6).orientation)%3], config))
+
+	return strings
+}
+
+func getTerminalWidth() int {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		// fallback and default width
+		return 80
+	}
+	return width
+}
+
+func (cubes *Cubes) print(config DisplayConfig) {
+
+	var cubeStrings [][8]string
 
 	for i := range *cubes {
-		cubeStrings = append(cubeStrings, cubes.loadCubeStrings(i))
+		cubeStrings = append(cubeStrings, cubes.loadCubeStrings(i, config))
 	}
 
-	// 6 x 8 per cube
-	//   RR
-	//   RR
-	// WWGGYYBB
-	// WWGGYYBB
-	//   OO
-	//   OO
-
-	for i, _ := range *cubes {
-		for row := 0; row < 6; row++ {
+	fmt.Println()
+	for i := range *cubes {
+		for row := 0; row < len(cubeStrings[i]); row++ {
 			fmt.Println(cubeStrings[i][row])
 		}
 	}
+	fmt.Println()
+}
 
+func showOptions() {
+	fmt.Println()
+	fmt.Println("F  - [h]   U  - [i]   R  - [o]   L  - [f]   B  - [a]   D  - [s]")
+	fmt.Println("F' - [g]   U' - [r]   R' - [j]   L' - [e]   B' - [;]   D' - [l]")
+	fmt.Println("\nquit - [q]")
+	fmt.Println()
+}
+
+func deleteLines(count int) {
+	for i := 0; i < count; i++ {
+		fmt.Print("\033[1A\033[2K")
+	}
+}
+
+func (cubes *Cubes) Play(config *PlayConfig, displayConfig *DisplayConfig) {
+
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	input := make([]byte, 1)
+	dynamicLineCount := 10
+	// termWidth := getTerminalWidth()
+	// cubeWidth := 10
+	errorCount := 0
+	config.running = true
+	showOptions()
+	cubes.print(*displayConfig)
+	for config.running {
+		// read input
+		_, err := os.Stdin.Read(input)
+		if err != nil {
+			fmt.Println("input error:", err)
+			errorCount++
+			continue
+		}
+		deleteLines(dynamicLineCount)
+		errorCount = 0
+
+		// update cube
+		switch input[0] {
+		case 'h':
+			cubes.move(0, 'h')
+		case 'j':
+			cubes.move(0, 'j')
+		case 'i':
+			cubes.move(0, 'i')
+		case 'o':
+			cubes.move(0, 'o')
+		case 'f':
+			cubes.move(0, 'f')
+		case 'l':
+			cubes.move(0, 'l')
+		case ';':
+			cubes.move(0, ';')
+		case 'g':
+			cubes.move(0, 'g')
+		case 'r':
+			cubes.move(0, 'r')
+		case 'e':
+			cubes.move(0, 'e')
+		case 's':
+			cubes.move(0, 's')
+		case 'a':
+			cubes.move(0, 'a')
+		case ' ':
+			// timer
+		case 'q':
+			config.running = false
+		}
+
+		// render
+		cubes.print(*displayConfig)
+	}
 }
