@@ -328,26 +328,41 @@ func (cubes *Cubes) print(config DisplayConfig) {
 		cubeStrings = append(cubeStrings, cubes.loadCubeStrings(i, config))
 	}
 
-	fmt.Println()
+	fmt.Print("\r\n")
 	for i := range *cubes {
 		for row := 0; row < len(cubeStrings[i]); row++ {
-			fmt.Println(cubeStrings[i][row])
+			fmt.Print(cubeStrings[i][row], "\r\n")
 		}
 	}
-	fmt.Println()
+	fmt.Print("\r\n")
 }
 
 func showOptions() {
-	fmt.Println()
-	fmt.Println("F  - [h]   U  - [i]   R  - [o]   L  - [f]   B  - [a]   D  - [s]")
-	fmt.Println("F' - [g]   U' - [r]   R' - [j]   L' - [e]   B' - [;]   D' - [l]")
-	fmt.Println("\nquit - [q]")
+	fmt.Print("\r\nF  - [h]   U  - [i]   R  - [o]   L  - [f]   B  - [a]   D  - [s]")
+	fmt.Print("\r\nF' - [g]   U' - [r]   R' - [j]   L' - [e]   B' - [;]   D' - [l]")
+	fmt.Print("\r\n\nquit - [q]\r\n")
 }
 
 func deleteLines(count int) {
 	for i := 0; i < count; i++ {
 		fmt.Print("\033[1A\033[2K")
 	}
+}
+
+func disableCursorBlink() {
+	fmt.Print("\033[?12l")
+}
+
+func enableCursorBlink() {
+	fmt.Print("\033[?12h")
+}
+
+func disableCursor() {
+	fmt.Print("\033[?25l")
+}
+
+func enableCursor() {
+	fmt.Print("\033[?25h")
 }
 
 func (cubes *Cubes) Play(config *PlayConfig, displayConfig *DisplayConfig) {
@@ -357,6 +372,11 @@ func (cubes *Cubes) Play(config *PlayConfig, displayConfig *DisplayConfig) {
 		panic(err)
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	disableCursorBlink()
+	disableCursor()
+	defer enableCursorBlink()
+	defer enableCursor()
 
 	input := make([]byte, 1)
 	dynamicLineCount := 10
@@ -370,7 +390,7 @@ func (cubes *Cubes) Play(config *PlayConfig, displayConfig *DisplayConfig) {
 		// read input
 		_, err := os.Stdin.Read(input)
 		if err != nil {
-			fmt.Println("input error:", err)
+			fmt.Print("input error: ", err)
 			errorCount++
 			continue
 		}
