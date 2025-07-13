@@ -342,7 +342,6 @@ func showOptions() {
 	fmt.Println("F  - [h]   U  - [i]   R  - [o]   L  - [f]   B  - [a]   D  - [s]")
 	fmt.Println("F' - [g]   U' - [r]   R' - [j]   L' - [e]   B' - [;]   D' - [l]")
 	fmt.Println("\nquit - [q]")
-	fmt.Println()
 }
 
 func deleteLines(count int) {
